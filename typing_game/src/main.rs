@@ -18,6 +18,7 @@ use rusqlite::{params, Connection, Result};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Stdout};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 const DB_FILE: &str = "typing_data.db";
@@ -221,25 +222,30 @@ fn load_key_error_stats(conn: &Connection) -> Result<KeyErrorStats> {
 // --- Application Logic ---
 
 fn load_words_from_files() -> Option<Vec<String>> {
-    let paths: Vec<_> = glob("sentences/*.txt").ok()?.flatten().collect();
-    if paths.is_empty() {
-        return None;
-    }
-    let mut all_words = Vec::new();
-    for path in paths {
-        let content = fs::read_to_string(path).ok()?;
-        let words = content
-            .split_whitespace()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<String>>();
-        all_words.extend(words);
-    }
-    if all_words.is_empty() {
-        None
-    } else {
-        Some(all_words)
-    }
+    static WORD_CACHE: OnceLock<Option<Vec<String>>> = OnceLock::new();
+
+    WORD_CACHE
+        .get_or_init(|| {
+            let paths: Vec<_> = glob("sentences/*.txt").ok()?.flatten().collect();
+            if paths.is_empty() {
+                return None;
+            }
+            let mut all_words = Vec::new();
+            for path in paths {
+                let content = fs::read_to_string(path).ok()?;
+                let words = content
+                    .split_whitespace()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty());
+                all_words.extend(words);
+            }
+            if all_words.is_empty() {
+                None
+            } else {
+                Some(all_words)
+            }
+        })
+        .clone()
 }
 
 fn generate_text(
