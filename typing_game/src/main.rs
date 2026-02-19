@@ -355,8 +355,11 @@ fn main() -> anyhow::Result<()> {
 
     let result = run(&mut terminal, &mut app_state, &conn);
 
-    save_stats_to_db(&conn, &app_state.stats)?;
-    restore_terminal(&mut terminal)?;
+    let save_res = save_stats_to_db(&conn, &app_state.stats);
+    let restore_res = restore_terminal(&mut terminal);
+
+    save_res?;
+    restore_res?;
     result?;
     Ok(())
 }
@@ -382,7 +385,7 @@ fn run(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut AppState,
     conn: &Connection,
-) -> io::Result<()> {
+) -> anyhow::Result<()> {
     loop {
         terminal.draw(|f| ui(f, app))?;
 
@@ -430,7 +433,7 @@ fn run(
                                         if app.typed.len() == app.text.len() {
                                             app.finished = true;
                                             app.duration = app.start_time.map(|st| st.elapsed());
-                                            save_session_to_db(conn, app).unwrap_or_default(); // Save session and ignore potential errors
+                                            save_session_to_db(conn, app)?;
                                         }
                                     }
                                     KeyCode::Backspace => {
