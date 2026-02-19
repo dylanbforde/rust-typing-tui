@@ -246,32 +246,45 @@ fn generate_text(
     available_words: &Vec<String>,
     test_mode: &TestMode,
     word_count_target: Option<usize>,
-    _time_target: Option<Duration>, // _time_target is unused for now
+    time_target: Option<Duration>,
 ) -> Vec<char> {
     let mut rng = rand::rngs::ThreadRng::default();
     let mut generated_text = String::new();
 
     match test_mode {
         TestMode::Sentence => {
-            let sentence = available_words.choose(&mut rng).unwrap_or(&"No words found.".to_string()).clone();
-            generated_text.push_str(&sentence);
-        },
+            let sentence = available_words
+                .choose(&mut rng)
+                .map(|s| s.as_str())
+                .unwrap_or("No words found.");
+            generated_text.push_str(sentence);
+        }
         TestMode::WordsCount => {
             let target_count = word_count_target.unwrap_or(10); // Default to 10 words
             for i in 0..target_count {
-                let word = available_words.choose(&mut rng).unwrap();
+                let word = available_words
+                    .choose(&mut rng)
+                    .map(|s| s.as_str())
+                    .unwrap_or("word");
                 generated_text.push_str(word);
                 if i < target_count - 1 {
                     generated_text.push(' ');
                 }
             }
-        },
+        }
         TestMode::WordsTimed => {
-            // For timed mode, generate a sufficiently long text
-            // For now, let's generate a fixed number of words
-            let num_words = 50; // Generate 50 words for timed mode
+            // For timed mode, generate a sufficiently long text based on time_target
+            // Assume a high WPM (e.g., 200) to ensure the user doesn't run out of text.
+            // 200 WPM is approx 3.33 words per second. 5 words per second is even safer.
+            let num_words = match time_target {
+                Some(d) => (d.as_secs() as usize) * 5 + 20,
+                None => 100, // Default to 100 words if no time target provided
+            };
             for i in 0..num_words {
-                let word = available_words.choose(&mut rng).unwrap();
+                let word = available_words
+                    .choose(&mut rng)
+                    .map(|s| s.as_str())
+                    .unwrap_or("word");
                 generated_text.push_str(word);
                 if i < num_words - 1 {
                     generated_text.push(' ');
@@ -326,8 +339,10 @@ impl AppState {
     fn wpm(&self) -> f64 {
         self.duration.map_or(0.0, |d| {
             let elapsed_min = d.as_secs_f64() / 60.0;
-            if elapsed_min == 0.0 { return 0.0; }
-            let word_count = self.text.len() as f64 / 5.0;
+            if elapsed_min == 0.0 {
+                return 0.0;
+            }
+            let word_count = self.typed.len() as f64 / 5.0;
             word_count / elapsed_min
         })
     }
@@ -379,6 +394,16 @@ fn run(
 ) -> io::Result<()> {
     loop {
         terminal.draw(|f| ui(f, app))?;
+
+        if !app.finished && matches!(app.test_mode, TestMode::WordsTimed) {
+            if let (Some(start_time), Some(time_target)) = (app.start_time, app.time_target) {
+                if start_time.elapsed() >= time_target {
+                    app.finished = true;
+                    app.duration = Some(time_target);
+                    let _ = save_session_to_db(conn, app);
+                }
+            }
+        }
 
         if event::poll(Duration::from_millis(250))? {
             if let Event::Key(key) = event::read()? {
