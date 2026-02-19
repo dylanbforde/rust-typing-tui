@@ -52,7 +52,6 @@ struct AppState {
     available_words: Vec<String>,
     test_mode: TestMode,
     word_count_target: Option<usize>,
-    time_target: Option<Duration>,
 }
 struct LifetimeStats {
     total_sessions: u32,
@@ -252,7 +251,6 @@ fn generate_text(
     available_words: &Vec<String>,
     test_mode: &TestMode,
     word_count_target: Option<usize>,
-    _time_target: Option<Duration>, // _time_target is unused for now
 ) -> Vec<char> {
     let mut rng = rand::rngs::ThreadRng::default();
     let mut generated_text = String::new();
@@ -293,9 +291,8 @@ impl AppState {
         let available_words = load_words_from_files().unwrap_or_else(|| vec!["No words found.".to_string()]);
         let test_mode = TestMode::Sentence; // Default to sentence mode for now
         let word_count_target = None;
-        let time_target = None;
 
-        let text = generate_text(&available_words, &test_mode, word_count_target, time_target);
+        let text = generate_text(&available_words, &test_mode, word_count_target);
 
         Self {
             text,
@@ -312,13 +309,12 @@ impl AppState {
             available_words,
             test_mode,
             word_count_target,
-            time_target,
         }
     }
 
     fn reset(&mut self, conn: &Connection) {
         
-        self.text = generate_text(&self.available_words, &self.test_mode, self.word_count_target, self.time_target);
+        self.text = generate_text(&self.available_words, &self.test_mode, self.word_count_target);
         self.typed.clear();
         self.raw_keystrokes.clear();
         self.start_time = None;
